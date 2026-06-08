@@ -1,7 +1,7 @@
 # Wellin — Task Board
 
 > Этот файл обновляется автоматически при каждой рабочей сессии.
-> Последнее обновление: **2026-06-08** (сессия 4)
+> Последнее обновление: **2026-06-08** (сессия 5)
 
 ---
 
@@ -15,6 +15,21 @@
 | 🟡 | Важно (сделать вскоре после запуска) |
 | 🟢 | Желательно (nice-to-have) |
 | ⬜ | Не начато |
+
+---
+
+## Diet Planner (AI-генерация плана питания)
+
+| Статус | Задача | Детали |
+|--------|--------|--------|
+| ✅ | Страница DietPlannerPage | Форма → OrbitaLoader → карточка подтверждения → redirect на выбранную дату |
+| ✅ | Расширенная форма | Раздел цели (4 варианта), предпочтения по слотам (завтрак/обед/ужин), время готовки |
+| ✅ | Лоадер — OrbitaLoader logo | Карточка из HTML-дизайна: W-лого из OrbitaLoader + шаги + прогресс-бар + нота |
+| ✅ | SSE стриминг в Diet Planner | `runStreamingBackendTurn` + `onTextDelta` → текст агента в реальном времени |
+| ✅ | ±50 ккал допуск в промпте | `diet-planner.prompt.ts` — «within ±50 kcal of target» |
+| ✅ | Редирект на выбранную дату | `navigate(/meal-plan?date=${selectedDate})` после применения плана |
+| ✅ | MealPlanDashboard читает `?date=` | `useSearchParams` → `setSelectedDate` на маунте |
+| ⬜ 🟡 | Роут diet-planner | Убедиться что `/diet-planner` добавлен в router и доступен из навигации |
 
 ---
 
@@ -98,6 +113,7 @@
 | ✅ | LangGraph — простым языком | `docs/ai-architecture/langgraph-explained.md` |
 | ✅ | LangSmith + Multi-LLM | `docs/ai-architecture/langgraph-explained.md` (секции внизу) |
 | ✅ | Роадмап LangGraph | `docs/langgraph-migration-roadmap.md` |
+| ✅ | Diet Planner — логика работы | `docs/project-knowledge/diet-planner.md` |
 | ✅ | Этот файл (таск-борд) | `docs/TASKS.md` |
 
 ---
