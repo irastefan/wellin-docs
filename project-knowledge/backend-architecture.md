@@ -36,10 +36,12 @@ Swagger документация: `/docs` (в production: `https://foodieai-5921
 
 | Сервис | Роль |
 |--------|------|
-| `AgentService` | Основная логика чата: запуск OpenAI-цикла, tool execution, structured response |
-| `AgentOpenAiService` | Вызов OpenAI Responses API |
+| `AgentService` | Основная логика: runOpenAiLoop (Responses API), runChatCompletionsLoop (Chat Completions), processWithConversation |
+| `LangGraphAgentService` | LangGraph граф: RouterNode + 5 специализированных узлов, SSE-стриминг, PostgreSQL персистентность |
+| `AgentChatCompletionsService` | Chat Completions API (LM Studio / Ollama / любой openai-compat провайдер) |
+| `AgentOpenAiService` | OpenAI Responses API |
 | `AgentPromptService` | Выбор prompt по mode/context |
-| `AgentConversationService` | In-memory хранение истории (до 12 сообщений, MAP) |
+| `AgentConversationService` | In-memory хранение истории (legacy, используется в тестах) |
 | `AgentConfirmationService` | Создание и проверка pending confirmations |
 | `AgentToolAdapterService` | Адаптация MCP-инструментов для OpenAI (sanitize имён) |
 | `AgentToolPolicyService` | Разрешения: какие инструменты доступны в каком режиме |
@@ -58,13 +60,25 @@ Swagger документация: `/docs` (в production: `https://foodieai-5921
 | `self_care` | Self-care рутины | Полный CRUD для selfCare |
 | `food_image_analysis` | Анализ фото еды | user.me, product.search, recipe.search, mealPlan.historyGet |
 
-### OpenAI цикл (runOpenAiLoop)
-- Модель: `gpt-5-mini`
-- Максимум шагов: 4
-- Reasoning: `effort: low`
+### LLM провайдеры
+
+| `LLM_PROVIDER` | Реализация | Совместимость |
+|---------------|-----------|--------------|
+| `openai` (по умолчанию) | `runOpenAiLoop` → Responses API | OpenAI |
+| `openai_compat` | `runChatCompletionsLoop` → Chat Completions | LM Studio, Ollama, любой OpenAI-compatible |
+
+Модель задаётся переменной `AGENT_MODEL` (по умолчанию `gpt-4o-mini`).  
+Для LM Studio: `OPENAI_BASE_URL=http://localhost:1234/v1`, `LLM_PROVIDER=openai_compat`.
+
+### Параметры цикла
+- Максимум шагов: 10
+- Reasoning: `effort: low` (Responses API)
 - История контекста: последние 8 сообщений
-- Конфирмации для write-инструментов (кроме dangerous)
-- Dangerous tools (remove/delete) всегда требуют конфирмации
+
+### SSE стриминг (`POST /v1/agent/chat/stream`)
+События: `agent_start` → `tool_call` → `tool_result` → `text_delta` → `done` / `error`  
+Транспорт: `fetch` + `ReadableStream` (не `EventSource`, нужен POST).  
+Реализован в `LangGraphAgentService.chatStream()`.
 
 ---
 
@@ -140,8 +154,11 @@ Swagger документация: `/docs` (в production: `https://foodieai-5921
 Email OTP аутентификация:
 1. `POST /v1/auth/login/request-code` — отправляет OTP на email (через Resend Cloud Run)
 2. `POST /v1/auth/login` — принимает OTP → возвращает JWT Bearer token
+3. `POST /v1/auth/refresh` — переиздаёт JWT без повторного входа (автоматический refresh)
 
-JWT хранится в localStorage на frontend.
+JWT хранится в localStorage. TTL: 30 дней.  
+Frontend автоматически обновляет токен при старте приложения если до expiry < 7 дней.  
+При 401 ответе от API — `clearAccessToken()` + `redirect /login`.
 
 ---
 
@@ -203,10 +220,18 @@ PORT=3000
 CORS_ORIGINS
 JWT_SECRET, AUTH_CODE_SALT
 AUTH_EMAIL_*           # OTP email конфиг
-OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_DEFAULT_TOOLS
+OPENAI_API_KEY         # API ключ OpenAI (или совместимого провайдера)
+OPENAI_BASE_URL        # Базовый URL API (по умолчанию https://api.openai.com/v1)
+AGENT_MODEL            # Модель агента (по умолчанию gpt-4o-mini)
+LLM_PROVIDER           # openai (Responses API) или openai_compat (Chat Completions)
 AI_*_PLAN_*            # Квоты AI-планов
 GCS_UPLOAD_*           # Google Cloud Storage
 PADDLE_*               # Paddle billing
 MCP_API_KEY
 BODY_LIMIT             # Размер тела запроса (по умолчанию 20mb)
+USE_LANGGRAPH_AGENT    # true = LangGraph (по умолчанию), false = legacy AgentService
+LANGSMITH_TRACING      # true = включить трассировку в LangSmith
+LANGSMITH_API_KEY
+LANGSMITH_PROJECT      # wellin-agent
+LANGSMITH_ENDPOINT     # https://api.smith.langchain.com
 ```

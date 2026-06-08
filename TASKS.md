@@ -1,7 +1,7 @@
 # Wellin — Task Board
 
 > Этот файл обновляется автоматически при каждой рабочей сессии.
-> Последнее обновление: **2026-06-08**
+> Последнее обновление: **2026-06-08** (сессия 3)
 
 ---
 
@@ -45,6 +45,7 @@
 | ✅ | Удаление frontend prompts | Папка `features/ai/model/` удалена — 6 файлов, дублировали backend |
 | ⬜ 🟡 | AiAgentPage | Страница "в разработке". Нужен полноценный чат-интерфейс с историей |
 | ⬜ 🟢 | TanStack Query | Кэширование данных и optimistic updates |
+| ✅ | Entity-aware кнопки подтверждения | "Add to Plan", "Create Recipe", "Add to List", "Add Routine" — вместо универсального "Add" |
 | ⬜ 🟢 | Удалить неиспользуемые компоненты | `DashboardPlaceholderPage`, `SocialRow`, `PasswordField` |
 | ⬜ 🟢 | Архивировать `smart-food-plan/web/` | Старый прототип, не нужен |
 
@@ -69,7 +70,7 @@
 
 | Статус | Задача | Детали |
 |--------|--------|--------|
-| ⬜ 🟡 | Модель в env | `gpt-5-mini` хардкодом в `agent.service.ts:44` → перенести в `OPENAI_AGENT_MODEL` |
+| ✅ | Модель в env | `AGENT_MODEL` env var; `LLM_PROVIDER=openai_compat` для Chat Completions (LM Studio/Ollama) |
 | ⬜ 🟡 | Retry/backoff для OpenAI | Нет обработки transient ошибок (429, 503) |
 | ⬜ 🟡 | Prisma type casts | `(this.prisma as any)` в `billing.service.ts` |
 | ⬜ 🟢 | `shared/ui` barrel exports | Сейчас полные пути к каждому компоненту |
@@ -88,8 +89,10 @@
 | ✅ | API-карта | `docs/project-knowledge/api-map.md` |
 | ✅ | Агент (реализация) | `docs/project-knowledge/agent-current-implementation.md` |
 | ✅ | Billing | `docs/project-knowledge/billing-and-subscriptions.md` |
+| ✅ | Технический долг / очистка | `docs/project-knowledge/cleanup-plan.md` |
+| ✅ | Готовность к запуску | `docs/project-knowledge/launch-readiness.md` |
 | ✅ | LangGraph — простым языком | `docs/ai-architecture/langgraph-explained.md` |
-| ✅ | LangSmith — как подключить | `docs/ai-architecture/langgraph-explained.md` (секция внизу) |
+| ✅ | LangSmith + Multi-LLM | `docs/ai-architecture/langgraph-explained.md` (секции внизу) |
 | ✅ | Роадмап LangGraph | `docs/langgraph-migration-roadmap.md` |
 | ✅ | Этот файл (таск-борд) | `docs/TASKS.md` |
 

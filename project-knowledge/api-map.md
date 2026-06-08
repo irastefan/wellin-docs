@@ -20,6 +20,7 @@ Swagger: `{base_url}/docs`
 | POST | `/v1/auth/login/request-code` | Запросить OTP на email | Нет |
 | POST | `/v1/auth/login` | Войти с OTP → JWT + user data | Нет |
 | POST | `/v1/auth/register` | Зарегистрироваться | Нет |
+| POST | `/v1/auth/refresh` | Переиздать JWT (авто-refresh) | Да |
 
 ---
 
@@ -113,6 +114,7 @@ Swagger: `{base_url}/docs`
 | Метод | Маршрут | Описание | Auth |
 |-------|---------|----------|------|
 | POST | `/v1/agent/chat` | Чат с AI-агентом (tool use) | Да (AI quota) |
+| POST | `/v1/agent/chat/stream` | Стриминг через SSE (LangGraph) | Да (AI quota) |
 
 ### Параметры `/v1/agent/chat`
 ```json
@@ -188,7 +190,7 @@ Frontend вызывает `apiRequest("/v1/...")` и получает `{API_BASE
 | `selfCareApi.ts` | `/v1/self-care-routines/*` |
 | `settingsApi.ts` | `/v1/me`, `/v1/profile` |
 | `bodyMetricsApi.ts` | `/v1/body-metrics/*` |
-| `backendAgentApi.ts` | `/v1/agent/chat` |
+| `authApi.ts` | `/v1/auth/refresh` |
+| `backendAgentApi.ts` | `/v1/agent/chat`, `/v1/agent/chat/stream` |
 | `aiUsageApi.ts` | `/v1/ai/usage`, `/v1/ai/uploads/image` |
 | `billingApi.ts` | `/v1/billing/*` |
-| `mcpApi.ts` | `/mcp` |

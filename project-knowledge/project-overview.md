@@ -59,7 +59,7 @@ Wellin — приложение для питания и здоровья с AI-
 - **Framework**: NestJS 10
 - **ORM**: Prisma 5.22 + PostgreSQL
 - **Auth**: Email OTP → JWT Bearer
-- **AI**: OpenAI Responses API (`gpt-5-mini`)
+- **AI**: OpenAI Responses API или Chat Completions API; модель задаётся через `AGENT_MODEL` (по умолчанию `gpt-4o-mini`)
 - **Billing**: Paddle
 - **Storage**: Google Cloud Storage (изображения)
 - **Docs**: Swagger на `/docs`
@@ -87,15 +87,17 @@ Wellin — приложение для питания и здоровья с AI-
 
 ---
 
-## Статус проекта (на 2026-06-05)
+## Статус проекта (на 2026-06-08)
 
 - Backend: активен, задеплоен, работает
 - Frontend (web-mui): активен, задеплоен
 - Frontend (web): старый прототип, НЕ активен
 - Mobile (React Native): заготовка, НЕ активна
-- AI-агент: реализован на backend, работает
+- AI-агент: LangGraph + SSE стриминг + multi-LLM поддержка
 - MCP сервер: реализован, работает
-- Billing: реализован через Paddle
+- Billing: реализован через Paddle (past_due UI готов)
+- SEO: robots.txt, sitemap.xml, OG/Twitter теги
+- JWT refresh: автоматический (проактивный + реактивный)
 - Тесты: частично (ts-node-based в `foodieai/test/`)
 
 ---
@@ -122,4 +124,4 @@ shared/     Общие утилиты (i18n, theme, lib)
 - Карта API → [api-map.md](./api-map.md)
 - Технический долг → [cleanup-plan.md](./cleanup-plan.md)
 - Готовность к запуску → [launch-readiness.md](./launch-readiness.md)
-- Будущая миграция на LangGraph → [future-langgraph-migration.md](./future-langgraph-migration.md)
+- Будущая миграция на LangGraph → [future-langgraph-migration.md](./future-langgraph-migration.md) _(LangGraph уже реализован, файл исторический)_

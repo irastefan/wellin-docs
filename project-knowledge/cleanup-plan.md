@@ -1,192 +1,106 @@
 # План очистки и технический долг
 
+> Обновлено: 2026-06-08
+
 ## Приоритеты
 
 - 🔴 Критично — исправить до запуска
 - 🟡 Важно — исправить в ближайшее время
 - 🟢 Желательно — при возможности
+- ✅ Сделано
 
 ---
 
 ## 1. Frontend: дублирование AI путей вызова
 
-### Проблема
-В `features/ai/api/` существуют 6 файлов для AI-вызовов:
-- `backendAgentApi.ts` — НОВЫЙ путь (рекомендуемый)
-- `openaiAgentApi.ts` — СТАРЫЙ путь (прямой OpenAI, через user key)
-- `mealPlanAssistantApi.ts` — через `/v1/ai/responses`
-- `mealPlanAnalysisApi.ts` — через `/v1/ai/responses`
-- `recipeAssistantApi.ts` — через `/v1/ai/responses`
-- `mcpApi.ts` — прямой MCP вызов
+### ✅ ВЫПОЛНЕНО
+Все старые API-файлы удалены. В `features/ai/` остались только:
+- `backendAgentApi.ts` — единственный API, вызывает `/v1/agent/chat` и `/v1/agent/chat/stream`
+- `aiUsageApi.ts` — загрузка изображений и квоты
 
-### Использование
-| Диалог | Текущий API |
-|--------|------------|
-| `GlobalAiAgentDialog` | `backendAgentApi.ts` ✅ |
-| `ContextAgentDialog` | `backendAgentApi.ts` ✅ |
-| `MealPlanAssistantDialog` | `mealPlanAssistantApi.ts` ❓ Нужно проверить |
-| `MealPlanAnalysisDialog` | `mealPlanAnalysisApi.ts` ❓ Нужно проверить |
-| `RecipeAssistantDialog` | `recipeAssistantApi.ts` ❓ Нужно проверить |
-| `SelfCareAssistantDialog` | ? ❓ Нужно проверить |
-| `ShoppingAssistantDialog` | ? ❓ Нужно проверить |
-
-### Рекомендация (🟡 Важно)
-Перевести все диалоги на `backendAgentApi.ts` с соответствующим `mode`.  
-После проверки — удалить старые API файлы и промпты на frontend.
+Папка `features/ai/model/` (7 frontend-промптов) **удалена**.
 
 ---
 
-## 2. Frontend: дублирование промптов
+## 2. Frontend: унификация AI диалогов на backendAgentApi
 
-### Проблема
-12 файлов промптов в двух местах:
+### ✅ ВЫПОЛНЕНО
+Все диалоги переведены на `backendAgentApi.ts` через LangGraph:
 
-**Backend** (`foodieai/src/agent/prompts/`):
-- `base.prompt.ts`
-- `meal-plan-page.prompt.ts`
-- `meal-plan-slot.prompt.ts`
-- `recipe.prompt.ts`
-- `self-care.prompt.ts`
-- `shopping.prompt.ts`
-
-**Frontend** (`smart-food-plan/web-mui/src/features/ai/model/`):
-- `agentSystemPrompt.ts` — для openaiAgentApi
-- `mealPlanAnalysisPrompt.ts`
-- `mealPlanAssistantPrompt.ts`
-- `mealPlanPageAssistantPrompt.ts`
-- `recipeAssistantPrompt.ts`
-- `selfCareAssistantPrompt.ts`
-- `shoppingAssistantPrompt.ts`
-
-### Рекомендация (🟡 Важно)
-Промпты должны жить ТОЛЬКО на backend.  
-Frontend передаёт только `context` и `mode`.  
-После перехода всех диалогов на backend agent — удалить frontend промпты.
+| Диалог | API | Статус |
+|--------|-----|--------|
+| `GlobalAiAgentDialog` | `backendAgentApi.ts` | ✅ |
+| `ContextAgentDialog` | `backendAgentApi.ts` | ✅ |
+| `MealPlanAssistantDialog` | `backendAgentApi.ts` (SSE) | ✅ |
+| `MealPlanAnalysisDialog` | `backendAgentApi.ts` (SSE) | ✅ |
+| `RecipeAssistantDialog` | `backendAgentApi.ts` (SSE) | ✅ |
+| `SelfCareAssistantDialog` | `backendAgentApi.ts` (SSE) | ✅ |
+| `ShoppingAssistantDialog` | `backendAgentApi.ts` (SSE) | ✅ |
 
 ---
 
-## 3. Устаревшие страницы и компоненты
+## 3. Backend: захардкоженная модель AI
 
-### Кандидаты на проверку и удаление
+### ✅ ВЫПОЛНЕНО
+Модель теперь берётся из `AGENT_MODEL` env var (по умолчанию `gpt-4o-mini`).  
+`LLM_PROVIDER=openai_compat` переключает на Chat Completions API (LM Studio / Ollama).
+
+---
+
+## 4. Backend: In-memory история агента
+
+### ✅ ВЫПОЛНЕНО
+LangGraph + `@langchain/langgraph-checkpoint-postgres` — история диалогов хранится в PostgreSQL.  
+Переживает рестарт сервера и работает с несколькими инстансами Cloud Run.
+
+`AgentConversationService` (in-memory Map) сохранён как fallback для тестов и прямого `AgentService.chat()`.
+
+---
+
+## 5. Устаревшие страницы и компоненты
+
+### Кандидаты на удаление (🟢 Желательно)
 
 | Файл | Статус | Действие |
 |------|--------|----------|
-| `pages/AiAgentPage.tsx` | Route `/ai-agent` редиректит на `/meal-plan` | Проверить, скорее всего можно удалить |
-| `pages/DashboardPlaceholderPage.tsx` | Нигде не используется в роутере | Удалить |
-| `features/auth/components/PasswordField.tsx` | OTP не использует пароли | Проверить использование, удалить если unused |
-| `features/auth/components/SocialRow.tsx` | Social auth не реализован | Проверить, скорее всего удалить |
+| `pages/AiAgentPage.tsx` | Route `/ai-agent` редиректит на `/meal-plan` | Проверить использование, вероятно удалить |
+| `pages/DashboardPlaceholderPage.tsx` | Нигде не используется | Удалить |
+| `features/auth/components/PasswordField.tsx` | OTP не использует пароли | Проверить, удалить если unused |
+| `features/auth/components/SocialRow.tsx` | Social auth не реализован | Проверить, вероятно удалить |
 | `smart-food-plan/web/` | Старый прототип | НЕ активен, можно архивировать |
 | `smart-food-plan/mobile/` | React Native заготовка | НЕ активна, не трогать пока |
 
-### Действие (🟢 Желательно)
-Провести grep-аудит использования каждого компонента перед удалением.
+---
+
+## 6. Backend: `(this.prisma as any)` каст
+
+В `billing.service.ts` используется `(this.prisma as any)`.
+
+**Причина**: Вероятно несоответствие типов Prisma Client.  
+**Рекомендация** (🟡): Убрать `as any`, обновить типы или добавить поля в Prisma select.
 
 ---
 
-## 4. Backend: техдолг
+## 7. Отсутствие retry для OpenAI API
 
-### `(this.prisma as any)` каст
-
-В `billing.service.ts` многократно используется `(this.prisma as any)`:
-```typescript
-await (this.prisma as any).user.update(...)
-await (this.prisma as any).user.findUnique(...)
-```
-
-**Причина**: Вероятно, несоответствие типов Prisma Client после миграции.  
-**Рекомендация** (🟡): Убрать `as any` — обновить типы или добавить поля в Prisma select.
-
-### Захардкоженная модель AI
-
-В `agent.service.ts`:
-```typescript
-const model = "gpt-5-mini";
-```
-
-**Рекомендация** (🟢): Вынести в env-переменную `OPENAI_AGENT_MODEL`.
-
-### In-memory история агента
-
-`AgentConversationService` хранит историю в `Map` — теряется при рестарте.  
-В Cloud Run с несколькими инстансами — разные инстансы имеют разные истории.
-
-**Рекомендация** (🟡): Перенести историю в Redis или добавить sticky sessions на Cloud Run.  
-Или принять как ограничение (история короткая, потеря некритична).
-
-### Отсутствие retry для OpenAI API
-
-**Рекомендация** (🟢): Добавить exponential backoff для транзиентных ошибок OpenAI.
+**Рекомендация** (🟡): Добавить exponential backoff для транзиентных ошибок (429, 503).
 
 ---
 
-## 5. Отсутствие `index.ts` в shared/ui
+## 8. Frontend: нет глобального кэша
 
-Сейчас каждый компонент импортируется по полному пути:
-```typescript
-import { AppButton } from "../shared/ui/AppButton";
-import { AppInput } from "../shared/ui/AppInput";
-```
-
-**Рекомендация** (🟢): Создать `shared/ui/index.ts` для barrel exports.
+**Текущее состояние**: Нет TanStack Query. Каждый переход на страницу — новый fetch.  
+**Рекомендация** (🟢): Добавить TanStack Query для кэширования и optimistic updates.
 
 ---
 
-## 6. Конфликт дизайн-систем
+## 9. CORS_ORIGINS частично хардкодом
 
-В корне проекта: `Wellin Design System/redesign/` — новый CSS+HTML дизайн.  
-В web-mui: `theme/designSystem.ts` — текущая реализация.  
-Расхождение в цветах и стилях.
-
-**Рекомендация** (🟢): Провести аудит расхождений и синхронизировать CSS-переменные.
+**Рекомендация** (🟢): Все разрешённые origins должны браться только из `CORS_ORIGINS` env.
 
 ---
 
-## 7. Отсутствие TanStack Query (кэширование данных)
+## 10. `shared/ui` barrel exports
 
-Сейчас: каждый переход страницы делает новый fetch. Нет кэша, нет optimistic updates.  
-При добавлении позиции в meal plan — перезагружаем всю страницу.
-
-**Рекомендация** (🟢): Рассмотреть внедрение TanStack Query для основных сущностей.  
-Это существенно улучшит UX и снизит нагрузку на backend.
-
----
-
-## 8. Тесты
-
-**Текущее состояние**:
-- Backend тесты: ts-node based, в `test/` папке
-- Есть тесты: agent-foundation, ai.service, mcp-*, meal-plan-stats, tdee, user-me-contract
-- Frontend тесты: **отсутствуют**
-
-**Рекомендация** (🟡):
-- Добавить frontend smoke tests (хотя бы для основных flows)
-- Добавить integration test для Paddle webhook flow
-- Добавить E2E тест регистрации + первого meal plan
-
----
-
-## 9. CORS список
-
-В `main.ts` CORS список захардкожен. При добавлении нового домена нужен деплой.
-
-**Рекомендация** (🟢): Перенести CORS_ORIGINS в env переменную (она уже есть, но с fallback-списком в коде).
-
----
-
-## Краткий список для быстрой очистки
-
-### Можно удалить без риска (после проверки grep)
-- [ ] `pages/DashboardPlaceholderPage.tsx`
-- [ ] `features/auth/components/SocialRow.tsx` (если не используется)
-- [ ] `features/auth/components/PasswordField.tsx` (если не используется)
-
-### Требует рефакторинга
-- [ ] Диалоги перевести на `backendAgentApi.ts`
-- [ ] Убрать `(this.prisma as any)` в billing.service.ts
-
-### Требует архивирования
-- [ ] `smart-food-plan/web/` — старый прототип
-
-### Требует документирования
-- [ ] Что используется в `AiAgentPage.tsx`
-- [ ] Статус `mobile/` workspace
+**Текущее состояние**: Используются полные пути к каждому компоненту.  
+**Рекомендация** (🟢): Добавить `index.ts` barrel exports для `shared/ui/`.

@@ -170,53 +170,72 @@ LangSmith — платформа от LangChain для наблюдения за
 
 Видно: сколько времени, сколько токенов, что пошло не так, какой был промпт.
 
-## Текущий статус
+## ✅ Статус: подключён
 
-**Не подключён.** В `.env.example` нет переменных LangSmith.
+LangSmith подключён и работает. Трассировка включается переменными окружения.
 
-## Как подключить
+## Как пользоваться
 
-### 1. Зарегистрироваться
-Зайти на [smith.langchain.com](https://smith.langchain.com), создать аккаунт, создать проект "wellin".
-
-### 2. Получить API ключ
-В настройках LangSmith → API Keys → создать ключ.
-
-### 3. Добавить переменные в `.env`
+### Переменные в `.env`
 ```env
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-LANGCHAIN_API_KEY=ls__ваш_ключ_здесь
-LANGCHAIN_PROJECT=wellin
+LANGSMITH_TRACING=true
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+LANGSMITH_API_KEY=ls__ваш_ключ_здесь
+LANGSMITH_PROJECT=wellin-agent
 ```
 
-### 4. Добавить в `foodieai/src/agent/langgraph/langgraph-agent.service.ts`
+> Примечание: используются переменные `LANGSMITH_*` (не `LANGCHAIN_*`) — это актуальный формат `@langchain/core >= 0.3`.
 
-В начало файла (перед созданием графа):
-```typescript
-import { Client } from "langsmith";
+### Как включить
 
-// Достаточно просто поставить переменные окружения — LangGraph подхватывает автоматически
-// Но можно явно: new Client({ apiKey: process.env.LANGCHAIN_API_KEY })
-```
+Просто задай переменные — LangGraph подхватывает автоматически. Дополнительного кода не нужно.
 
-LangGraph.js автоматически отправляет трассировку если переменные окружения заданы. Дополнительного кода не нужно — просто переменные.
+При старте сервера в логах будет: `LangSmith tracing enabled — project: "wellin-agent"`.
 
-### 5. Добавить в `.env.example`
-```env
-# LangSmith (optional, for tracing)
-LANGCHAIN_TRACING_V2=false
-LANGCHAIN_API_KEY=
-LANGCHAIN_PROJECT=wellin
-```
-
-## Что будет видно в LangSmith
+## Что видно в LangSmith
 - Каждый разговор пользователя с агентом
-- Какие узлы графа были вызваны
+- Какие узлы графа были вызваны (RouterNode → MealPlanAgentNode и т.д.)
 - Сколько токенов потрачено
 - Время ответа каждого узла
 - Полные промпты и ответы OpenAI
 - Ошибки с полным стектрейсом
 
-## Когда подключать?
-Рекомендую подключить до запуска — это даёт visibility в продакшене бесплатно (до определённого лимита).
+---
+
+# Multi-LLM — поддержка разных провайдеров
+
+## Зачем это нужно
+
+Иногда нужно:
+- **Локально**: запустить LM Studio с открытой моделью вместо платного OpenAI
+- **В облаке**: сменить модель без деплоя
+- **Тестирование**: попробовать другую модель быстро
+
+## Как это работает
+
+Агент поддерживает два режима через переменные окружения:
+
+| Переменная | Значение | Описание |
+|-----------|---------|----------|
+| `LLM_PROVIDER` | `openai` | Responses API (stateful, умный, только OpenAI) |
+| `LLM_PROVIDER` | `openai_compat` | Chat Completions API (совместим с LM Studio, Ollama и любым openai-compat) |
+| `AGENT_MODEL` | `gpt-4o-mini` | Название модели (по умолчанию) |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | URL API (можно поменять на локальный) |
+
+## LM Studio (локально, без интернета)
+
+```env
+OPENAI_BASE_URL=http://localhost:1234/v1
+LLM_PROVIDER=openai_compat
+AGENT_MODEL=<название загруженной модели в LM Studio>
+OPENAI_API_KEY=lm-studio   # любая строка, LM Studio не проверяет
+```
+
+## Разница между режимами
+
+| | `openai` (Responses API) | `openai_compat` (Chat Completions) |
+|-|--------------------------|-------------------------------------|
+| Управление историей | Stateful через `previous_response_id` | Накапливает сообщения в массиве |
+| Tool calls | `{type, name, parameters}` | `{type, function: {name, parameters}}` |
+| Совместимость | Только OpenAI | OpenAI, LM Studio, Ollama, Mistral, и др. |
+| Рекомендация | Продакшн с OpenAI | Локальная разработка / другие провайдеры |

@@ -100,9 +100,8 @@ assets/
 
 | Feature | API клиент | Хуки |
 |---------|-----------|------|
-| `ai/` | aiUsageApi.ts, backendAgentApi.ts, mcpApi.ts, mealPlanAnalysisApi.ts, mealPlanAssistantApi.ts, openaiAgentApi.ts, recipeAssistantApi.ts | — |
-| `ai/model/` | — | Промпты: agentSystemPrompt.ts, mealPlanAnalysisPrompt.ts, mealPlanAssistantPrompt.ts, mealPlanPageAssistantPrompt.ts, recipeAssistantPrompt.ts, selfCareAssistantPrompt.ts, shoppingAssistantPrompt.ts |
-| `auth/` | authApi.ts | useAuthPage.ts |
+| `ai/` | `backendAgentApi.ts` (основной: `/v1/agent/chat` + SSE stream), `aiUsageApi.ts` | — |
+| `auth/` | authApi.ts (+ `refreshToken()`) | useAuthPage.ts |
 | `billing/` | billingApi.ts | — |
 | `body-metrics/` | bodyMetricsApi.ts | — |
 | `meal-plan/` | mealPlanApi.ts | useMealPlanDashboard.ts |
@@ -112,16 +111,12 @@ assets/
 | `settings/` | settingsApi.ts | — |
 | `shopping/` | shoppingApi.ts | — |
 
-### Важное замечание по AI feature
-В `features/ai/` есть **несколько** API-файлов для вызова AI:
-- `backendAgentApi.ts` — основной (вызов `/v1/agent/chat`)
-- `openaiAgentApi.ts` — прямой вызов OpenAI (со своего ключа)
-- `mealPlanAssistantApi.ts` — через `/v1/ai/responses`
-- `mealPlanAnalysisApi.ts` — через `/v1/ai/responses`
-- `recipeAssistantApi.ts` — через `/v1/ai/responses`
-- `mcpApi.ts` — прямой MCP вызов
+### AI feature — единый путь вызова
+`features/ai/` содержит только два файла:
+- `backendAgentApi.ts` — единственный API для AI, вызывает `/v1/agent/chat` (обычный) и `/v1/agent/chat/stream` (SSE)
+- `aiUsageApi.ts` — загрузка изображений и статистика квот
 
-Это является **техническим долгом** — см. [cleanup-plan.md](./cleanup-plan.md).
+Все старые файлы (openaiAgentApi.ts, mealPlanAssistantApi.ts, mealPlanAnalysisApi.ts, recipeAssistantApi.ts, mcpApi.ts) и папка `model/` с frontend-промптами **удалены** в рамках очистки.
 
 ---
 
@@ -134,8 +129,7 @@ assets/
 | AiAssistantPanel | AiAssistantPanel.tsx | Панель AI-ассистента |
 | AiAgentConversation | AiAgentConversation.tsx | Отображение истории чата |
 | AiAgentComposer | AiAgentComposer.tsx | Поле ввода сообщения |
-| AgentConfirmationCard | AgentConfirmationCard.tsx | Карточка подтверждения действия |
-| AiAgentToolsCard | AiAgentToolsCard.tsx | Отображение tool calls |
+| AgentConfirmationCard | AgentConfirmationCard.tsx | Карточка подтверждения (entity-aware кнопки: "Add to Plan", "Create Recipe", ...) |
 | GlobalAiAgentDialog | GlobalAiAgentDialog.tsx | Глобальный диалог агента |
 | ContextAgentDialog | ContextAgentDialog.tsx | Контекстный диалог (со страницы) |
 | PageAssistantDialogShell | PageAssistantDialogShell.tsx | Общая оболочка для контекстных диалогов |
@@ -197,13 +191,15 @@ assets/
 ## API Client (`shared/api/http.ts`)
 
 ```typescript
-apiRequest<T>(path, options) → Promise<T>
+apiRequest<T>(path, init, options?) → Promise<T>
 ```
 
 - Использует `fetch`
 - Авторизация: `Bearer` token из `localStorage`
 - Ошибки: класс `ApiError` (status + payload)
 - Dev-proxy: Vite проксирует `/api` → backend (обход CORS)
+- **401 перехват**: при 401 ответе → `clearAccessToken()` + редирект `/login` (если был токен)
+- Опция `_skipSessionRedirect: true` — отключает редирект для `refreshToken()` вызова
 
 ---
 
@@ -223,6 +219,32 @@ apiRequest<T>(path, options) → Promise<T>
 - Поддержка EN + RU
 - `messages.ts` — все строки интерфейса
 - `languages.ts` — маппинг языков для AI-промптов
+
+---
+
+## SEO (`public/`)
+
+| Файл | Содержимое |
+|------|-----------|
+| `public/robots.txt` | Allow all + Sitemap pointer |
+| `public/sitemap.xml` | 7 публичных URL с приоритетами |
+| `index.html` | Дефолтные OG/Twitter Card теги для лендинга |
+
+Для страниц используется хук `useMeta` (`shared/lib/useMeta.ts`):
+```typescript
+useMeta({ title: "...", description: "...", path: "/pricing", image: "..." })
+```
+Устанавливает `document.title`, `og:*`, `twitter:*` теги. Используется на: `LandingPage`, `PublicPricingPage`, `PublicLegalPage`.
+
+---
+
+## JWT Refresh
+
+При старте приложения (`AppProviders.tsx`):
+1. Декодирует JWT из localStorage (без запроса к серверу)
+2. Если до expiry < 7 дней → вызывает `refreshToken()` → обновляет токен в localStorage
+
+Реактивный refresh: `apiRequest` перехватывает 401 → очищает токен → редирект `/login`.
 
 ---
 

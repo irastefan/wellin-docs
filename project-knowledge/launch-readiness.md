@@ -1,5 +1,7 @@
 # Готовность к публичному запуску
 
+> Обновлено: 2026-06-08
+
 ## Система оценки
 
 - ✅ Готово — реализовано и работает
@@ -14,12 +16,13 @@
 |---------|--------|---------|
 | Регистрация через Email OTP | ✅ | Работает |
 | Вход через Email OTP | ✅ | Работает |
-| JWT токен в localStorage | ✅ | Работает |
+| JWT токен в localStorage | ✅ | TTL 30 дней |
 | Защищённые маршруты (ProtectedRoute) | ✅ | Работает |
 | Публичные маршруты (PublicOnlyRoute) | ✅ | Работает |
 | Выход из системы | ✅ | Работает (удаление токена) |
+| JWT автоматический refresh | ✅ | `POST /v1/auth/refresh`; проактивный при < 7 дней до expiry |
+| 401 → редирект `/login` | ✅ | `apiRequest` перехватывает 401 |
 | Восстановление доступа | ⚠️ | Нет специального флоу "забыл email" |
-| Истечение JWT токена | ⚠️ | Нет автоматического refresh, нужно повторно войти |
 | Верификация email | ✅ | OTP = подтверждение email |
 
 ---
@@ -28,17 +31,21 @@
 
 | Функция | Статус | Заметки |
 |---------|--------|---------|
-| Глобальный AI-агент | ✅ | Работает через backendAgentApi |
-| AI в Meal Plan (page mode) | ✅ | Работает |
+| Глобальный AI-агент | ✅ | LangGraph + SSE стриминг |
+| AI в Meal Plan (page mode) | ✅ | LangGraph, SSE |
 | AI в слоте Meal Plan (slot mode) | ✅ | Proposal + confirmation flow |
-| AI для рецептов | ⚠️ | RecipeAssistantDialog может использовать старый путь |
-| AI для Shopping List | ⚠️ | ShoppingAssistantDialog может использовать старый путь |
-| AI для Self-Care | ⚠️ | SelfCareAssistantDialog нужно проверить |
+| AI для рецептов | ✅ | LangGraph RecipeAgentNode, Structured Outputs |
+| AI для Shopping List | ✅ | LangGraph ShoppingAgentNode |
+| AI для Self-Care | ✅ | LangGraph SelfCareAgentNode |
 | Анализ фото еды | ✅ | food_image_analysis mode |
 | AI квоты (Free план) | ✅ | 100 000 токенов/месяц |
 | AI квоты (Pro план) | ✅ | 1 000 000 токенов/месяц |
-| UI при исчерпании квот | ⚠️ | Нет красивого UI для "квота исчерпана" |
-| Многоязычность AI (EN/RU) | ✅ | Работает |
+| UI при исчерпании квот | ✅ | `AiQuotaExceededError` → сообщение + кнопка "Выбрать план" |
+| Многоязычность AI (EN/RU/HE) | ✅ | Централизованный `agent-messages.ts` |
+| Персистентная история | ✅ | PostgreSQL через LangGraph checkpointer |
+| SSE стриминг (real-time tool progress) | ✅ | `POST /v1/agent/chat/stream` |
+| Multi-LLM поддержка | ✅ | `AGENT_MODEL` + `LLM_PROVIDER=openai_compat` для LM Studio/Ollama |
+| LangSmith трассировка | ✅ | `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY` |
 
 ---
 
@@ -66,16 +73,17 @@
 | Аспект | Статус | Заметки |
 |--------|--------|---------|
 | Desktop версия | ✅ | DashboardLayout с sidebar |
-| Mobile версия | ⚠️ | Нужно проверить responsive behaviour |
+| Mobile версия | ⚠️ | Нужно проверить responsive behaviour на реальных устройствах |
 | Dark mode | ✅ | Полная поддержка |
 | Light mode | ✅ | Полная поддержка |
-| RTL (иврит) | ⚠️ | Заявлен, но нужно проверить |
+| RTL (иврит) | ⚠️ | Заявлен, не проверен на всех страницах |
 | EN локализация | ✅ | |
 | RU локализация | ✅ | |
 | Landing page | ✅ | Маркетинговый контент |
 | Pricing page | ✅ | |
 | Legal pages | ✅ | Terms, Privacy, Refund |
 | Лого и брендинг | ✅ | Wellin |
+| Confirmation кнопки (entity-aware) | ✅ | "Add to Plan", "Create Recipe", "Add to List", ... |
 
 ---
 
@@ -89,9 +97,9 @@
 | Trial активация | ✅ | По webhook |
 | Pro активация | ✅ | По webhook |
 | Billing portal | ✅ | Paddle Customer Portal |
-| UI для past_due | ❌ | Нет уведомления для пользователя |
+| UI для past_due | ✅ | Баннер в DashboardLayout → кнопка Update payment |
 | UI для отмены | ⚠️ | Нет graceful downgrade сообщения |
-| Тест в production | ⚠️ | Неизвестно протестирован ли live flow |
+| Тест в production | ⚠️ | Sandbox OK, live flow не протестирован |
 
 ---
 
@@ -102,12 +110,12 @@
 | Backend health check | ✅ | GET /health |
 | Error handling (backend) | ✅ | GlobalHttpExceptionFilter |
 | Error handling (frontend) | ⚠️ | AppErrorState есть, но coverage неполный |
-| AI история при рестарте | ⚠️ | In-memory, теряется при рестарте |
-| OpenAI retry логика | ⚠️ | Нет retry/backoff |
+| AI история при рестарте | ✅ | LangGraph PostgreSQL — постоянная |
+| OpenAI retry логика | ⚠️ | Нет retry/backoff для 429/503 |
 | Logging (backend) | ✅ | HttpLoggingInterceptor |
 | CORS настройка | ✅ | Список доменов в main.ts |
 | Paddle webhook защита | ✅ | HMAC-SHA256 проверка |
-| JWT security | ✅ | Bearer token |
+| JWT security | ✅ | Bearer token + авто-refresh |
 | Body size limit | ✅ | 20mb (configurable) |
 
 ---
@@ -116,11 +124,11 @@
 
 | Аспект | Статус | Заметки |
 |--------|--------|---------|
-| Page titles | ⚠️ | Нужно проверить наличие |
-| Meta descriptions | ⚠️ | Нужно проверить |
-| OG tags (Social sharing) | ⚠️ | Нужно проверить |
-| Sitemap | ⚠️ | Скорее всего отсутствует |
-| robots.txt | ⚠️ | Нужно проверить |
+| Page titles | ✅ | `useMeta` хук на всех публичных страницах |
+| Meta descriptions | ✅ | OG + Twitter Card в `index.html` и через `useMeta` |
+| OG tags (Social sharing) | ✅ | `og:title`, `og:description`, `og:image`, `og:url` |
+| Sitemap | ✅ | `public/sitemap.xml` (7 URL) |
+| robots.txt | ✅ | `public/robots.txt` |
 | favicon | ✅ | В public/ |
 
 ---
@@ -129,7 +137,7 @@
 
 | Тип | Статус | Заметки |
 |-----|--------|---------|
-| Backend unit тесты | ✅ | ts-node в test/ (tdee, ai, mcp, meal-plan-stats) |
+| Backend unit тесты | ✅ | ts-node в test/ (mcp, meal-plan, tdee, ai, agent-foundation) |
 | Frontend тесты | ❌ | Отсутствуют |
 | E2E тесты | ❌ | Отсутствуют |
 | Paddle webhook тесты | ⚠️ | Требуют live окружения |
@@ -139,31 +147,21 @@
 ## Итоговая оценка
 
 ### Критические проблемы (блокируют запуск)
-1. ❌ **Нет UI для past_due** — пользователь не знает что подписка просрочена
-2. ❌ **Нет frontend тестов** — нет уверенности в стабильности
+1. ❌ **Нет frontend тестов** — нет уверенности в стабильности
 
-### Требуют доработки перед запуском
-1. ⚠️ **Проверить и унифицировать AI диалоги** — некоторые используют старый path
-2. ⚠️ **Протестировать Paddle в live** — только sandbox тестирование
-3. ⚠️ **Mobile responsive** — нужна проверка на реальных устройствах
-4. ⚠️ **UI при исчерпании AI квот** — нет красивого сообщения
-5. ⚠️ **SEO meta tags** — важно для органического трафика
+### Требуют доработки перед/после запуска
+1. ⚠️ **Протестировать Paddle в live** — только sandbox тестирование
+2. ⚠️ **Mobile responsive** — нужна проверка на реальных устройствах
+3. ⚠️ **UI при отмене подписки** — нет graceful downgrade сообщения
+4. ⚠️ **RTL проверка (иврит)** — задекларирован, не проверен полностью
+5. ⚠️ **OpenAI retry/backoff** — нет защиты от transient ошибок 429/503
 
 ### Готово к запуску
 - ✅ Все основные функции приложения
-- ✅ Auth (Email OTP)
-- ✅ AI-агент (backend mode)
-- ✅ Billing infrastructure
+- ✅ Auth (Email OTP + JWT auto-refresh)
+- ✅ AI-агент (LangGraph + SSE + multi-LLM)
+- ✅ Billing infrastructure (past_due UI готов)
+- ✅ SEO (meta, OG, sitemap, robots.txt)
 - ✅ Dark/Light mode
 - ✅ EN/RU локализация
-
----
-
-## Рекомендуемые шаги перед запуском
-
-1. **Неделя 1**: Проверить и унифицировать все AI диалоги на backendAgentApi
-2. **Неделя 1**: Добавить UI для past_due/отмены подписки
-3. **Неделя 2**: Протестировать полный Paddle flow (sandbox → live)
-4. **Неделя 2**: Mobile responsive проверка
-5. **Неделя 2**: Добавить SEO meta tags на лендинге и pricing
-6. **Перед запуском**: Smoke test всех основных сценариев
+- ✅ Персистентная история диалогов (PostgreSQL)
