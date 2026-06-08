@@ -33,7 +33,7 @@
 | ✅ | recipe.create в meal_plan_page | Агент теперь может сохранять рецепты из контекста плана питания |
 | ⬜ 🟢 | Phase 6: Long-term Memory | UserMemory + pgvector, помнить предпочтения между сессиями |
 | ⬜ 🟢 | Phase 7: CriticAgent | Финальная проверка ответов агента |
-| ⬜ 🟡 | LangSmith интеграция | Трассировка и мониторинг агента. Инструкция: `docs/ai-architecture/langgraph-explained.md` |
+| ✅ | LangSmith интеграция | Автоматическая трассировка через `LANGSMITH_TRACING=true`; startup-лог; `start:dev` загружает `.env` через `NODE_OPTIONS` |
 
 ---
 
