@@ -1,7 +1,7 @@
 # Wellin — Task Board
 
 > Этот файл обновляется автоматически при каждой рабочей сессии.
-> Последнее обновление: **2026-06-08** (сессия 3)
+> Последнее обновление: **2026-06-08** (сессия 4)
 
 ---
 
@@ -31,6 +31,9 @@
 | ✅ | Piece units (gramsPerUnit) | "1 яйцо" корректно считает калории |
 | ✅ | Централизованный i18n | Все строки EN/RU/HE в одном файле `agent-messages.ts` |
 | ✅ | recipe.create в meal_plan_page | Агент теперь может сохранять рецепты из контекста плана питания |
+| ✅ | recipeId rule в base prompt | Агент везде (глобальный режим + meal_plan_page) использует recipeId+servings, а не manual entry |
+| ✅ | Serving unit в calculateFromProduct | Backend корректно считает калории для порция/serving/portion |
+| ✅ | Confirmation в RecipeAssistantDialog | Карточка подтверждения показывается при запросе «добавить рецепт в план» со страницы рецепта |
 | ⬜ 🟢 | Phase 6: Long-term Memory | UserMemory + pgvector, помнить предпочтения между сессиями |
 | ⬜ 🟢 | Phase 7: CriticAgent | Финальная проверка ответов агента |
 | ✅ | LangSmith интеграция | Автоматическая трассировка через `LANGSMITH_TRACING=true`; startup-лог; `start:dev` загружает `.env` через `NODE_OPTIONS` |
@@ -48,6 +51,7 @@
 | ✅ | Entity-aware кнопки подтверждения | "Add to Plan", "Create Recipe", "Add to List", "Add Routine" — вместо универсального "Add" |
 | ⬜ 🟢 | Удалить неиспользуемые компоненты | `DashboardPlaceholderPage`, `SocialRow`, `PasswordField` |
 | ⬜ 🟢 | Архивировать `smart-food-plan/web/` | Старый прототип, не нужен |
+| ✅ | Frontend тесты (Vitest) | 81 тест: units, http, aiUsageApi, mealPlanApi, i18n |
 
 ---
 
@@ -60,9 +64,9 @@
 | ✅ | JWT auto-refresh | `POST /v1/auth/refresh`; проактивный refresh при <7 днях до expiry; 401 → redirect `/login` |
 | ✅ | SEO: meta tags, OG, robots.txt | `index.html` OG/Twitter; `robots.txt`; `sitemap.xml`; `useMeta` хук на landing/pricing/legal страницах |
 | ⬜ 🔴 | Paddle live flow тест | Тестировался только sandbox. Нужен прогон с реальной картой |
-| ⬜ 🟡 | Mobile responsive check | Проверить на реальных устройствах |
+| ✅ | Mobile responsive check | Dashboard sidebar скрыт на xs/md; мобильный Drawer + Dock; страницы имеют pb для dock; чарты со скроллом |
 | ⬜ 🟡 | Billing UI при отмене подписки | Сообщение при graceful downgrade |
-| ⬜ 🟡 | RTL проверка (иврит) | Задекларирован, не проверен на всех страницах |
+| ✅ | RTL проверка (иврит) | theme+Emotion RTL корректны; исправлено 3 проблемы: textAlign "right"→"end" (MealPlanSectionsCard, PricingContent), left→insetInlineStart (LandingNav underline) |
 
 ---
 
