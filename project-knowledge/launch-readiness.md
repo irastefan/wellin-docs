@@ -98,7 +98,7 @@
 | Pro активация | ✅ | По webhook |
 | Billing portal | ✅ | Paddle Customer Portal |
 | UI для past_due | ✅ | Баннер в DashboardLayout → кнопка Update payment |
-| UI для отмены | ⚠️ | Нет graceful downgrade сообщения |
+| UI для отмены | ✅ | Баннер cancellation scheduled + дата + кнопка "Сохранить подписку" |
 | Тест в production | ⚠️ | Sandbox OK, live flow не протестирован |
 
 ---
@@ -138,7 +138,7 @@
 | Тип | Статус | Заметки |
 |-----|--------|---------|
 | Backend unit тесты | ✅ | ts-node в test/ (mcp, meal-plan, tdee, ai, agent-foundation) |
-| Frontend тесты | ❌ | Отсутствуют |
+| Frontend тесты | ✅ | Vitest: 81 тест (units, http, aiUsageApi, mealPlanApi, i18n) |
 | E2E тесты | ❌ | Отсутствуют |
 | Paddle webhook тесты | ⚠️ | Требуют live окружения |
 
@@ -147,7 +147,8 @@
 ## Итоговая оценка
 
 ### Критические проблемы (блокируют запуск)
-1. ❌ **Нет frontend тестов** — нет уверенности в стабильности
+
+Нет критических проблем.
 
 ### Требуют доработки перед/после запуска
 1. ⚠️ **Протестировать Paddle в live** — только sandbox тестирование

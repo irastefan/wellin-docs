@@ -1,244 +1,337 @@
-# Prompts Catalog
+# Каталог промптов — Wellin AI Agent
+
+> **Важно:** Этот файл нужно обновлять при каждом изменении промптов.
+> Промпты находятся в `foodieai/src/agent/prompts/` и `foodieai/src/agent/i18n/`.
+> Последнее обновление: **2026-06-08**
 
 ---
 
-## Backend промпты (foodieai)
+## Как строится финальный промпт
 
-Промпты находятся в `foodieai/src/agent/prompts/`.
-Каждый промпт строится динамически как конкатенация строк через `.join(" ")`.
-
----
-
-### 1. Base Prompt
-
-**Файл**: `foodieai/src/agent/prompts/base.prompt.ts`
-**Функция**: `buildBasePrompt(language: AgentLanguage)`
-**Используется**: Во всех режимах как первая часть системного промпта
-
-**Содержание**:
+Каждый запрос к агенту получает **системный промпт из двух частей**:
 
 ```
-You are SmartFood / Wellin AI inside a nutrition planning app.
-You help with meal plans, recipes, shopping lists, food analysis, products, self-care, and user progress.
-Write the final answer in {language}.
-For this user, Russian is usually preferred when language=ru.
-Do not expose internal IDs.
-Do not expose internal tool names.
-Use tools only when needed to read real app data or perform app actions.
-Do not claim an app action happened unless a tool actually performed it.
-Correct obvious speech-to-text mistakes, keyboard typos, and approximate brand spellings when the intended entity is clear.
-Ask one short clarification if the request is uncertain.
-Keep answers concise and practical.
+[Base Prompt]  +  [Mode Prompt]
 ```
+
+Склейка происходит в `AgentPromptService.buildPrompt()`:
+```typescript
+[buildBasePrompt(language), buildModePrompt(context, language)].join("\n\n")
+```
+
+Режим (`mode`) приходит с фронтенда в поле `context.mode`. Он определяет, на какой странице находится пользователь и какие инструменты ему доступны.
 
 ---
 
-### 2. Global Mode Prompt
+## 1. Base Prompt — базовые правила
 
-**Файл**: `foodieai/src/agent/services/agent-prompt.service.ts` (inline)
-**Активируется при**: `mode = "global"`
+**Файл:** `prompts/base.prompt.ts`  
+**Применяется:** всегда, в любом режиме, первым блоком
 
-**Содержание**:
+### Содержание и объяснение каждого правила
+
+**"You are SmartFood / Wellin AI inside a nutrition planning app."**
+→ Задаёт личность агента. Он называет себя Wellin AI, знает что находится внутри приложения питания.
+
+**"You help with meal plans, recipes, shopping lists, food analysis, products, self-care, and user progress."**
+→ Перечисляет область знаний — агент не выходит за эти темы и не отвечает на нерелевантные вопросы.
+
+**"Write the final answer in {language}."**
+→ Язык ответа определяется настройками пользователя (EN / RU / HE). Передаётся как текстовое название языка через `getLanguageName()` из `agent-messages.ts`.
+
+**"Do not expose internal IDs."**
+→ Агент не должен показывать UUID из базы данных. Пользователь видит имена, а не `3f8a-...`.
+
+**"Do not expose internal tool names."**
+→ Пользователь не должен видеть `mealPlan.addEntry` или `shoppingList.addItem` в ответах. Только человекочитаемый текст.
+
+**"Use tools only when needed to read real app data or perform app actions."**
+→ Агент не вызывает инструменты «на всякий случай». Если данные уже известны из контекста — использует их.
+
+**"Do not claim an app action happened unless a tool actually performed it."**
+→ Ключевое правило честности. Агент не может написать «добавил в план» если `mealPlan.addEntry` не был вызван. Без этого правила LLM склонен к галлюцинациям о выполненных действиях.
+
+**"When a user requests multiple items or actions in one message, call all required tools in a single parallel batch."**
+→ «Добавь яйца, овсянку и йогурт на завтрак» → три вызова `mealPlan.addEntry` одновременно, а не по очереди с паузами. Критично для скорости.
+
+**"When food is described in pieces or units (e.g. '1 egg', '2 protein bars'), use unit='шт' and always include gramsPerUnit."**
+→ Решает проблему подсчёта калорий для штучных продуктов. Без `gramsPerUnit` калории для «1 яйца» считались бы неправильно (база данных хранит на 100г). `gramsPerUnit=55` для яйца = 55г × ккал/100г = правильный результат.  
+Дефолты: яйцо=55, протеиновый батончик=55, куриная грудка=200, банан=120, яблоко=180, тост=30.
+
+**"Correct obvious speech-to-text mistakes, keyboard typos, and approximate brand spellings."**
+→ Пользователь говорит голосом — «форель» может прийти как «трел» или «торель». Агент исправляет и работает с правильным названием.
+
+**"Ask one short clarification if the request is uncertain."**
+→ Если запрос неоднозначен — задать один вопрос, а не несколько. Избегает перегруженного диалога.
+
+**"Keep answers concise and practical."**
+→ Агент не пишет эссе. Конкретные короткие ответы.
+
+---
+
+## 2. Router Prompt — маршрутизатор
+
+**Файл:** `prompts/router.prompt.ts`  
+**Применяется:** только в `global` режиме для LLM-классификации сообщения  
+**Это отдельный, одиночный вызов LLM — не часть основного промпта**
+
+### Задача
+
+Когда пользователь пишет из «глобального» чата (не с конкретной страницы), нужно определить — о чём запрос. Роутер классифицирует сообщение в одну из категорий и отправляет в нужный узел графа.
+
+### Категории
+
+| Категория | Когда |
+|-----------|-------|
+| `meal_plan` | Добавить, убрать, спланировать, скопировать еду |
+| `recipe` | Создать, найти, изменить рецепт |
+| `shopping` | Управление списком покупок |
+| `self_care` | Рутины, замеры тела, wellness |
+| `general` | Приветствие, вопросы о питании, всё остальное |
+
+### Важная особенность
+
+Промпт требует ответ ровно **одним словом** (`Reply with ONLY the category name`). Это позволяет детерминированно парсить ответ без JSON-парсинга. Если ответ не из списка — дефолт `general`.
+
+---
+
+## 3. Global Mode Prompt
+
+**Файл:** `services/agent-prompt.service.ts` (inline строка)  
+**Применяется:** когда `mode = "global"` и роутер уже определил `route = "general"`
 
 ```
 You are in global mode. Use read-only app tools for context and propose changes carefully.
 ```
 
----
-
-### 3. Meal Plan Page Prompt
-
-**Файл**: `foodieai/src/agent/prompts/meal-plan-page.prompt.ts`
-**Функция**: `buildMealPlanPagePrompt(context, language)`
-**Активируется при**: `mode = "meal_plan_page"`
-
-**Ключевые инструкции**:
-- Активная дата из `context.selectedDate` (интерпретировать сегодня/вчера/завтра относительно неё)
-- Передаётся `relativeDates` (yesterday, tomorrow)
-- Предпочитает загружать данные через `mealPlan.dayGet`, не доверяет снапшоту frontend
-- Если добавляет несколько продуктов — вызвать `mealPlan.addEntry` по одному разу для каждого
-- Для составных блюд — разбивать на отдельные компоненты
-- Использует `mealPlan.historyGet` для нечёткого поиска повторных/брендовых продуктов
-- Slot enums: BREAKFAST, LUNCH, DINNER, SNACK
-- Для копирования → `mealPlan.copySlot`, только после выполнения — краткое подтверждение
+Это минималистичный промпт для «общего» разговора с агентом. Агент может смотреть данные (read-only инструменты), но осторожно предлагает изменения. Нет специализированных инструкций.
 
 ---
 
-### 4. Meal Plan Slot Prompt
+## 4. Meal Plan Page Prompt
 
-**Файл**: `foodieai/src/agent/prompts/meal-plan-slot.prompt.ts`
-**Функция**: `buildMealPlanSlotPrompt(context, language)`
-**Активируется при**: `mode = "meal_plan_slot"`, также `mode = "food_image_analysis"`
+**Файл:** `prompts/meal-plan-page.prompt.ts`  
+**Применяется:** `mode = "meal_plan_page"` — пользователь на странице плана питания  
+**Доступные инструменты:** `mealPlan.dayGet`, `mealPlan.historyGet`, `mealPlan.addEntry`, `mealPlan.removeEntry`, `mealPlan.copySlot`, `recipe.search`, `recipe.get`, `recipe.create`, `product.search`, `shoppingList.get`, `shoppingList.addCategory`, `shoppingList.addItem`
 
-**Ключевые инструкции**:
-- Режим редактирования конкретного слота (`context.selectedSlot` + `context.selectedDate`)
-- Показывает текущие элементы слота из `context.existingItems`
-- **НЕ вызывать** `mealPlan.addEntry` — backend сам преобразует proposal в confirmation
-- Для составных блюд — разбивать на отдельные items
-- Возвращать **только JSON** (без markdown)
+### Динамические данные
 
-**Обязательная форма ответа**:
+В промпт инжектируются:
+- `context.selectedDate` — выбранная дата в интерфейсе (может отличаться от сегодня)
+- `relativeDates` — объект с yesterday/tomorrow относительно выбранной даты
+
+### Ключевые правила и почему они нужны
+
+**"The selected meal plan date is {date}. Interpret today/yesterday/tomorrow relative to the selected date."**
+→ Пользователь может смотреть план на понедельник, а сегодня пятница. Без этого правила «добавь на завтра» добавит на субботу вместо вторника.
+
+**"Prefer loading current day data with mealPlan.dayGet instead of trusting a frontend snapshot."**
+→ Фронтенд передаёт снапшот данных в контексте, но он может устареть. Агент всегда перечитывает через API для точности.
+
+**"You also have access to shopping list tools."**
+→ С недавнего времени (добавлено в этой сессии) — пользователь может попросить добавить продукт в шопинг-лист прямо с дашборда плана питания.
+
+**"You also have access to recipe.create."**
+→ Пользователь может попросить «сохрани это как рецепт» прямо из плана — агент создаёт рецепт с полными нутриентами.
+
+**"When calling mealPlan.removeEntry, always pass itemName."**
+→ В карточке подтверждения пользователь должен видеть что именно будет удалено по имени, а не по ID.
+
+**"When using mealPlan.addEntry without productId or recipeId, it is a manual item and you must include name, amount, unit, kcal100..."**
+→ Если продукт не найден в базе — агент добавляет «ручную запись» с оценочными данными нутриентов. Обязательные поля перечислены явно, иначе LLM их пропускает.
+
+**"For multi-day planning requests, call mealPlan.addEntry for each day/slot combination... Include all days in a single parallel batch."**
+→ «Запланируй завтраки на неделю» → 7 параллельных вызовов, не последовательных. Без этого это занимало бы 7 × время_ответа_LLM.
+
+**"For composed dishes, salads, bowls, keep useful components separate."**
+→ «Добавь цезарь с курицей» → два отдельных элемента (салат + курица), а не одна запись «цезарь с курицей». Это важно для точного подсчёта КБЖУ.
+
+**"Use mealPlan.historyGet for fuzzy matching of repeated, branded, or typo-prone foods."**
+→ Если пользователь говорит «добавь тот же творог что вчера» — агент ищет в истории вместо того чтобы создавать новый продукт.
+
+---
+
+## 5. Meal Plan Slot Prompt
+
+**Файл:** `prompts/meal-plan-slot.prompt.ts`  
+**Применяется:** `mode = "meal_plan_slot"` и `mode = "food_image_analysis"`  
+**Ключевое отличие от Meal Plan Page:** агент **не вызывает инструменты изменения** — только готовит предложение
+
+### Контекст
+
+Пользователь открыл диалог добавления еды в конкретный слот (например, завтрак 12 июня). Передаются:
+- `context.selectedSlot` — BREAKFAST / LUNCH / DINNER / SNACK
+- `context.selectedDate` — дата
+- `context.existingItems` — что уже есть в этом слоте
+
+### Почему НЕ вызывать mealPlan.addEntry
+
+В этом режиме агент работает как **"предложения"** — он формирует proposal/items, отправляет их фронтенду, фронтенд показывает карточку подтверждения. Только после подтверждения бэкенд добавляет запись. Если агент вызовет `addEntry` сам — действие выполнится без подтверждения.
+
+### Форма ответа — строгий JSON
+
 ```json
 {
-  "message": "string",
+  "message": "Вот предложение для завтрака",
   "needsConfirmation": true,
-  "proposal": { "name": "...", "amount": number, "unit": "...", "kcal100": number, "protein100": number, "fat100": number, "carbs100": number } | null,
-  "items": [/* массив при 2+ компонентах */]
+  "proposal": {
+    "name": "Овсянка на молоке",
+    "amount": 250,
+    "unit": "g",
+    "kcal100": 68,
+    "protein100": 3.2,
+    "fat100": 1.4,
+    "carbs100": 12
+  },
+  "items": []
 }
 ```
 
-- `proposal` — для одного элемента
-- `items` — для двух и более отдельных компонентов
-- Если `items.length >= 2` → `proposal` должен быть `null`
-- `proposal=null, items=[]` → нужно уточнение
+**Правила:**
+- `proposal` — используется если предложение ровно одно
+- `items` — массив для двух и более отдельных компонентов
+- Если `items.length >= 2` → `proposal = null` (они взаимоисключают друг друга)
+- `proposal = null, items = []` → нужно уточнение у пользователя
+
+### Режим food_image_analysis
+
+Используется тот же промпт что и `meal_plan_slot`, но контекст приходит с фотографией еды. Агент анализирует что на фото, оценивает нутриенты и создаёт proposal. Логика одинаковая.
 
 ---
 
-### 5. Recipe Prompt
+## 6. Recipe Prompt
 
-**Файл**: `foodieai/src/agent/prompts/recipe.prompt.ts`
-**Функция**: `buildRecipePrompt(context, language)`
-**Активируется при**: `mode = "recipe_create"`, `"recipe_edit"`, `"recipe_template"`
+**Файл:** `prompts/recipe.prompt.ts`  
+**Применяется:** `mode = "recipe_create"`, `"recipe_edit"`, `"recipe_template"`  
+**Доступные инструменты:** `recipe.search`, `recipe.get`, `product.search`, `mealPlan.dayGet`, `mealPlan.addEntry`, `shoppingList.get`, `shoppingList.addCategory`, `shoppingList.addItem`
 
-**Ключевые инструкции**:
-- При редактировании: `context.recipeTitle` передаётся как текущее название
-- **НЕ вызывать** `recipe.create` в template/create/edit flow — готовить черновик
-- Сохранять все ингредиенты пользователя, каждый отдельно
-- Категории: breakfast, lunch, dinner, snack, dessert, salad, soup, main, side, drink
-- Для каждого ингредиента: `amount, unit, kcal100, protein100, fat100, carbs100`
-- Возвращать **только JSON**
+### Три режима — один промпт с условиями
 
-**Обязательная форма ответа**:
+| Режим | Контекст | Поведение |
+|-------|---------|-----------|
+| `recipe_create` | Новый рецепт с нуля | `intent = "create"` |
+| `recipe_edit` | Существующий рецепт (`recipeTitle` из context) | `intent = "update"` |
+| `recipe_template` | Шаблон (без конкретного рецепта) | `intent = "create"` |
+
+### Ключевые правила
+
+**"Do not call recipe.create — prepare a draft for the UI editor instead."**
+→ Агент не сохраняет рецепт напрямую в базу. Он возвращает черновик, который отображается в редакторе рецептов. Пользователь нажимает «Сохранить»/«Создать» сам. Это даёт возможность проверить и отредактировать перед сохранением.
+
+**"Set intent='update' when preparing an updated draft."**
+→ Это поле читает фронтенд — если `intent = "update"` и передан `currentRecipe`, то вызывается `updateRecipe()` вместо `createRecipe()`. Именно из-за отсутствия этого поля в ответе раньше агент всегда создавал новый рецепт вместо обновления (баг исправлен в этой сессии через фронтенд).
+
+**Форма ответа:**
 ```json
 {
-  "message": "string",
-  "needsConfirmation": true,
-  "intent": "create" | "update",
+  "message": "Вот обновлённый рецепт лосося",
+  "intent": "update",
   "draft": {
-    "title": "string",
-    "description": "string",
-    "category": "main",
+    "title": "Лосось с овощами",
+    "description": "Лёгкое блюдо на ужин",
+    "category": "dinner",
     "servings": 2,
-    "ingredients": [{ "name": "...", "amount": 100, "unit": "g", "kcal100": 100, "protein100": 10, "fat100": 5, "carbs100": 15 }],
-    "steps": ["string"]
-  } | null
+    "ingredients": [
+      { "name": "Филе лосося", "amount": 100, "unit": "g", "kcal100": 206, "protein100": 20, "fat100": 13, "carbs100": 0 }
+    ],
+    "steps": ["Посолить лосось.", "Обжарить 10 минут."]
+  }
 }
 ```
 
-- `intent = "update"` при редактировании
-- `draft = null` только если запрос непонятен → краткий вопрос
+**"Use one of these categories: breakfast, lunch, dinner, snack, dessert, salad, soup, main, side, drink."**
+→ Фиксированный список категорий совпадает с enum на бэкенде. Если агент придумает другую — сохранение упадёт с ошибкой валидации.
 
 ---
 
-### 6. Shopping Prompt
+## 7. Shopping Prompt
 
-**Файл**: `foodieai/src/agent/prompts/shopping.prompt.ts`
-**Функция**: `buildShoppingPrompt(language)`
-**Активируется при**: `mode = "shopping_list"`
+**Файл:** `prompts/shopping.prompt.ts`  
+**Применяется:** `mode = "shopping_list"`  
+**Доступные инструменты:** `shoppingList.get`, `shoppingList.addCategory`, `shoppingList.addItem`, `shoppingList.setItemState`, `shoppingList.removeItem`, `product.search`, `mealPlan.dayGet`
 
-**Ключевые инструкции**:
-- Роль: ревью, организация и улучшение списка покупок
-- Предлагать пропущенные товары, лучшую группировку, дубликаты
-- Загружать текущий список через `shoppingList.get`
-- Не утверждать, что действие выполнено, если инструмент не вызывался
+### Задача
 
----
+Агент-помощник для раздела списка покупок. Умеет:
+- Просмотреть текущий список (`shoppingList.get`)
+- Добавить категорию и позиции
+- Снять/поставить отметку «куплено»
+- Сгенерировать список из плана питания (читает `mealPlan.dayGet` за нужные дни, добавляет через `shoppingList.addItem`)
 
-### 7. Self-Care Prompt
+**"When adding multiple items at once, call shoppingList.addItem for each item in a single parallel batch."**
+→ Аналогично мил-плану — параллельные вызовы для скорости.
 
-**Файл**: `foodieai/src/agent/prompts/self-care.prompt.ts`
-**Функция**: `buildSelfCarePrompt(context, language)`
-**Активируется при**: `mode = "self_care"`
-
-**Ключевые инструкции**:
-- `context.entityId` передаётся как сфокусированная сущность, но не раскрывается пользователю
-- Загружать рутину через `selfCare.weekGet`
-- Рекомендации должны быть реалистичными и маленькими
+**"Do not claim items were added, removed, or changed unless tools performed the action."**
+→ Стандартное правило честности, продублировано в специфическом промпте для надёжности.
 
 ---
 
-## Frontend промпты (smart-food-plan/web-mui)
+## 8. Self-Care Prompt
 
-Находятся в `smart-food-plan/web-mui/src/features/ai/model/`.
-Используются только в прямом OpenAI flow (`openaiAgentApi.ts`) — **не в backend agent**.
+**Файл:** `prompts/self-care.prompt.ts`  
+**Применяется:** `mode = "self_care"`  
+**Доступные инструменты:** `selfCare.weekGet`, `selfCare.slotCreate`, `selfCare.slotUpdate`, `selfCare.slotRemove`, `selfCare.itemCreate`, `selfCare.itemUpdate`, `selfCare.itemRemove`
 
----
+### Задача
 
-### 8. Agent System Prompt (frontend)
+Помощник для управления wellness-рутинами. Пользователь может попросить добавить/изменить/удалить рутины (утренняя зарядка, приём воды, уход за кожей и т.д.).
 
-**Файл**: `src/features/ai/model/agentSystemPrompt.ts`
-**Функция**: `buildAgentSystemPrompt(userInstructions?, responseLanguage?)`
-**Используется в**: `openaiAgentApi.runAgentTurn()` (прямой OpenAI flow)
+**"context.entityId — Do not expose it."**
+→ Если пользователь открыл конкретный слот рутины, его ID передаётся в контексте, но агент не показывает его в ответе.
 
-**Отличия от backend base prompt**:
-- Явно указывает не искать продукты по умолчанию при запросе идей
-- Предполагает, что база продуктов может быть пустой
-- Добавляет `userInstructions` из настроек пользователя
-- Включает инструкции для анализа изображений
+**"Keep suggestions realistic, small, and easy to maintain."**
+→ Агент не предлагает «делайте спорт 3 часа в день». Маленькие реалистичные шаги.
 
 ---
 
-### 9. Meal Plan Analysis Prompt (frontend)
+## 9. i18n агента — строки подтверждения
 
-**Файл**: `src/features/ai/model/mealPlanAnalysisPrompt.ts`
-**Используется в**: `mealPlanAnalysisApi.ts`
+**Файл:** `i18n/agent-messages.ts`  
+**Применяется:** в `AgentConfirmationService` — для формирования заголовков карточек подтверждения и системных ответов
 
-Одноразовый промпт для анализа рациона (не агентский, нет tool use).
+Это не промпт для LLM, а набор локализованных строк, которые бэкенд формирует программно.
 
----
+### Что хранится
 
-### 10. Meal Plan Assistant Prompt (frontend)
+| Ключ | Назначение |
+|------|-----------|
+| `promptLanguageName` | Текст для промпта: «Write in Russian» |
+| `confirmationPending` | Сообщение пока действие ждёт подтверждения |
+| `allSuccess` / `allError` / `partialSuccess` | Ответ после выполнения подтверждённого действия |
+| `addTitle` / `removeTitle` / `createTitle` | Заголовок карточки подтверждения |
+| `dest.shoppingList` / `dest.selfCare` | Куда добавляется: «в список покупок» / «в рутину» |
 
-**Файл**: `src/features/ai/model/mealPlanAssistantPrompt.ts`
-**Используется в**: `mealPlanAssistantApi.ts`
+### Три языка
 
-Контекстный помощник для страницы плана.
-
----
-
-### 11. Meal Plan Page Assistant Prompt (frontend)
-
-**Файл**: `src/features/ai/model/mealPlanPageAssistantPrompt.ts`
-
-Специализированный промпт для помощника на странице плана (frontend-side).
-
----
-
-### 12. Recipe Assistant Prompt (frontend)
-
-**Файл**: `src/features/ai/model/recipeAssistantPrompt.ts`
-**Используется в**: `recipeAssistantApi.ts`
-
-Контекстный помощник для редактора рецептов.
+| Ключ | EN | RU | HE |
+|------|----|----|-----|
+| `confirmationPending` | "I prepared the action. Confirm it and I will run it." | "Я подготовила действие. Подтверди, чтобы я его выполнила." | "הכנתי פעולה. אשר כדי שאבצע אותה." |
+| `allSuccess` | "Done, the action was completed." | "Готово, действие выполнено." | "בוצע, הפעולה הושלמה." |
 
 ---
 
-### 13. Self-Care Assistant Prompt (frontend)
+## Как промпты связаны с tool policy
 
-**Файл**: `src/features/ai/model/selfCareAssistantPrompt.ts`
+Каждый режим имеет свой набор разрешённых инструментов в `AgentToolPolicyService`. Промпт и policy должны быть **согласованы** — если промпт упоминает инструмент, он должен быть в списке разрешённых для этого режима, иначе LLM попытается вызвать инструмент, а бэкенд его заблокирует.
 
-Промпт для self-care помощника на frontend.
+```
+Промпт упоминает → tool policy разрешает → MCP выполняет
+```
+
+### Таблица соответствия
+
+| Режим | Файл промпта | Инструменты добавлены в policy |
+|-------|-------------|-------------------------------|
+| `meal_plan_page` | `meal-plan-page.prompt.ts` | shoppingList.* добавлены 2026-06-08 |
+| `recipe_*` | `recipe.prompt.ts` | shoppingList.* добавлены 2026-06-08 |
+| `shopping_list` | `shopping.prompt.ts` | mealPlan.dayGet для генерации по плану |
+| `meal_plan_slot` | `meal-plan-slot.prompt.ts` | нет write-инструментов (только proposal) |
 
 ---
 
-### 14. Shopping Assistant Prompt (frontend)
+## Что нужно обновить при изменении промптов
 
-**Файл**: `src/features/ai/model/shoppingAssistantPrompt.ts`
-
-Промпт для помощника в разделе покупок на frontend.
-
----
-
-## Важное наблюдение
-
-На **backend** и **frontend** существуют **дублирующиеся промпты** для одних и тех же задач:
-
-| Задача | Backend prompt | Frontend prompt |
-|--------|----------------|-----------------|
-| Базовые инструкции | `base.prompt.ts` | `agentSystemPrompt.ts` |
-| Страница плана питания | `meal-plan-page.prompt.ts` | `mealPlanPageAssistantPrompt.ts` |
-| Рецепты | `recipe.prompt.ts` | `recipeAssistantPrompt.ts` |
-| Покупки | `shopping.prompt.ts` | `shoppingAssistantPrompt.ts` |
-| Self-care | `self-care.prompt.ts` | `selfCareAssistantPrompt.ts` |
-
-Это является **техническим долгом**: два несинхронизированных источника истины для одной логики.
+1. Обновить этот файл (`docs/ai-architecture/prompts-catalog.md`)
+2. Если добавлен новый инструмент в промпт — добавить его в `AgentToolPolicyService` для нужного режима
+3. Если изменилась форма JSON-ответа — обновить парсинг на фронтенде (`backendAgentApi.ts`)
+4. Если добавлен новый режим — создать файл промпта + добавить case в `AgentPromptService` + добавить `AgentMode` тип + добавить в tool policy
