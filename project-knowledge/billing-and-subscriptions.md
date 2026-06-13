@@ -15,7 +15,7 @@
 | Токены AI/месяц | 100 000 | 1 000 000 | 300 000 |
 | AI actions/месяц | 100 | 1 000 | — |
 | Цена | 0 | $9.99/мес | — |
-| Срок trial | — | — | 14 дней |
+| Срок trial | — | — | 7 дней |
 | `isPro` | false | true | true |
 
 ---
@@ -123,7 +123,7 @@ DEFAULT_FREE_PLAN_MONTHLY_AI_ACTIONS     = 100
 DEFAULT_ACTIVE_PLAN_MONTHLY_TOKEN_LIMIT  = 1_000_000
 DEFAULT_ACTIVE_PLAN_MONTHLY_AI_ACTIONS   = 1_000
 DEFAULT_TRIAL_TOKEN_LIMIT                = 300_000
-DEFAULT_TRIAL_DAYS                       = 14
+DEFAULT_TRIAL_DAYS                       = 7
 DEFAULT_FREE_PLAN_CODE                   = "free"
 DEFAULT_PAID_PLAN_CODE                   = "pro"
 ```
@@ -135,12 +135,17 @@ DEFAULT_PAID_PLAN_CODE                   = "pro"
 - `AiUsageLog` — лог каждого AI-запроса
 
 ### AI Features
-```
-RECIPE_GENERATION    — генерация рецептов
-MEAL_ANALYSIS        — анализ питания
-SMART_PRODUCT_MATCH  — умный поиск продуктов
-ADVANCED_AI_TOOLS    — агент (основной AI-чат, используется везде)
-```
+
+| Feature | Определён | Реально проверяется (`ensureCanExecute`) | Включён в Free |
+|---|---|---|---|
+| `ADVANCED_AI_TOOLS` | ✅ | ✅ (`agent.service`, `ai.service`) | ✅ |
+| `MEAL_ANALYSIS` | ✅ | ✅ (`ai.service`, только для proxy endpoint) | ✅ |
+| `RECIPE_GENERATION` | ✅ | ❌ нигде не проверяется | ❌ (только Pro по определению, но не гейтится) |
+| `SMART_PRODUCT_MATCH` | ✅ | ❌ нигде не проверяется | ✅ |
+
+**Итог**: Free и Pro пользователи имеют доступ к одним и тем же AI-функциям. Единственная реальная разница — квота токенов (100k vs 1M в месяц).
+
+Подробный анализ: [docs/billing-plans.md](../billing-plans.md)
 
 ---
 

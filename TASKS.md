@@ -1,7 +1,7 @@
 # Wellin — Task Board
 
 > Этот файл обновляется автоматически при каждой рабочей сессии.
-> Последнее обновление: **2026-06-08** (сессия 5)
+> Последнее обновление: **2026-06-11** (сессия 7)
 
 ---
 
@@ -15,6 +15,16 @@
 | 🟡 | Важно (сделать вскоре после запуска) |
 | 🟢 | Желательно (nice-to-have) |
 | ⬜ | Не начато |
+
+---
+
+## Баги (активные)
+
+| Статус | Задача | Детали |
+|--------|--------|--------|
+| ✅ | Meal Plan: количество для единицы "Штука" не меняется корректно | `gramsPerUnit` теперь сохраняется в MealPlanEntry и передаётся при update |
+| ✅ | Agent settings: кастомный промпт не добавляется к основному | `userInstructions` добавлен в DTO и аппендится к системному промпту |
+| ✅ | Admin: очистка неиспользуемых изображений удаляет изображения рецептов | Фикс: DB хранит полные URL, теперь извлекаем GCS-ключ перед сравнением |
 
 ---
 
@@ -66,6 +76,13 @@
 | ✅ | Entity-aware кнопки подтверждения | "Add to Plan", "Create Recipe", "Add to List", "Add Routine" — вместо универсального "Add" |
 | ⬜ 🟢 | Удалить неиспользуемые компоненты | `DashboardPlaceholderPage`, `SocialRow`, `PasswordField` |
 | ⬜ 🟢 | Архивировать `smart-food-plan/web/` | Старый прототип, не нужен |
+| ⬜ 🟡 | Agent settings: убрать отображение tool data и выбор моделей | Скрыть из UI настроек агента блок с tool data и селектор моделей |
+| ✅ | Desktop sidebar: подменю настроек | Десктоп: навигация по `/settings?section=X` работает корректно; мобильный Drawer: подменю всегда раскрыто |
+| ✅ | Settings: навигация по URL-параметру | `SettingsPage` читает `?section=` через `useSearchParams`; tab и URL синхронизированы |
+| ✅ | Meal Plan slot AI: паттерн AgentConfirmationCard | Кнопка агента в слоте использует `runBackendAgentTurn` + `AgentConfirmationCard` — без дублирования кода |
+| ⬜ 🟡 | Settings: переключатель метрической/имперской системы | Выбор между кг/фунты, см/футы в настройках профиля |
+| ⬜ 🟢 | Landing page: добавить раздел с тарифными планами | Секция с ценами и планами на лендинге |
+| ⬜ 🟢 | Landing page: добавить переключатель языка | Смена языка прямо на лендинге |
 | ✅ | Frontend тесты (Vitest) | 81 тест: units, http, aiUsageApi, mealPlanApi, i18n |
 
 ---
@@ -79,8 +96,9 @@
 | ✅ | JWT auto-refresh | `POST /v1/auth/refresh`; проактивный refresh при <7 днях до expiry; 401 → redirect `/login` |
 | ✅ | SEO: meta tags, OG, robots.txt | `index.html` OG/Twitter; `robots.txt`; `sitemap.xml`; `useMeta` хук на landing/pricing/legal страницах |
 | ⬜ 🔴 | Paddle live flow тест | Тестировался только sandbox. Нужен прогон с реальной картой |
+| ⬜ 🔴 | Ограничить действия для не-про подписок | Закрыть/лочить определённые фичи для пользователей без про-подписки |
 | ✅ | Mobile responsive check | Dashboard sidebar скрыт на xs/md; мобильный Drawer + Dock; страницы имеют pb для dock; чарты со скроллом |
-| ⬜ 🟡 | Billing UI при отмене подписки | Сообщение при graceful downgrade |
+| ✅ | Billing UI при отмене подписки | `SubscriptionStatusBanner`: cancel scheduled (info), PAST_DUE (warning), EXPIRED/CANCELED (error) |
 | ✅ | RTL проверка (иврит) | theme+Emotion RTL корректны; исправлено 3 проблемы: textAlign "right"→"end" (MealPlanSectionsCard, PricingContent), left→insetInlineStart (LandingNav underline) |
 
 ---
@@ -91,6 +109,8 @@
 |--------|--------|--------|
 | ✅ | Модель в env | `AGENT_MODEL` env var; `LLM_PROVIDER=openai_compat` для Chat Completions (LM Studio/Ollama) |
 | ⬜ 🟡 | Retry/backoff для OpenAI | Нет обработки transient ошибок (429, 503) |
+| ✅ | Admin page: управление квотами действий по планам | GET/PATCH `/v1/admin/ai-plans`, GET `/v1/admin/ai-stats`; карточка с дашбордом статистики и редактированием квот |
+| ✅ | [INVESTIGATE] Добавление по фото точнее, чем по тексту | Причина: фото даёт больше контекста (размер порции, состав, способ приготовления) — это ожидаемое поведение, не баг |
 | ⬜ 🟡 | Prisma type casts | `(this.prisma as any)` в `billing.service.ts` |
 | ⬜ 🟢 | `shared/ui` barrel exports | Сейчас полные пути к каждому компоненту |
 | ⬜ 🟢 | CORS_ORIGINS в env | Сейчас частично хардкодом |
