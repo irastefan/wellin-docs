@@ -284,7 +284,37 @@ You are in global mode. Use read-only app tools for context and propose changes 
 
 ---
 
-## 9. i18n агента — строки подтверждения
+## 9. Diet Planner Prompt
+
+**Файл:** `prompts/diet-planner.prompt.ts`  
+**Применяется:** `mode = "diet_planner"` — пользователь запросил генерацию полного дневного плана  
+**Доступные инструменты:** `mealPlan.dayGet`, `mealPlan.addEntry`, `product.search`
+
+### Задача
+
+Агент выступает в роли сертифицированного диетолога. Получает в сообщении предпочтения пользователя (диета, ограничения, цель, стиль питания) и строит полный дневной план на 4 слота (BREAKFAST / LUNCH / DINNER / SNACK).
+
+### Алгоритм выполнения
+
+1. Вызывает `mealPlan.dayGet` → пропускает слоты, где уже ≥ 2 элемента
+2. Вызывает `mealPlan.addEntry` для всех новых элементов **одним параллельным батчем**
+3. Возвращает краткое резюме с нутритивными акцентами и одним персонализированным советом
+
+### Ключевые правила
+
+- **Строгое соблюдение ограничений** — аллергии и запреты никогда не нарушаются
+- **Точность нутриентов** — для каждого элемента без `productId` указываются `kcal100/protein100/fat100/carbs100`
+- **Калорийная цель** — суммарный день должен попасть в ±50 ккал от целевого TDEE профиля
+- **Практичность** — только доступные, реальные продукты; варьировать текстуры и вкусы по слотам
+- **Параллельный батч** — все `mealPlan.addEntry` в одном запросе, не последовательно
+
+### Отличие от meal_plan_page
+
+В `diet_planner` агент **сам вызывает** `mealPlan.addEntry` (не proposal). Пользователь уже дал согласие через форму DietPlannerPage до отправки запроса.
+
+---
+
+## 10. i18n агента — строки подтверждения
 
 **Файл:** `i18n/agent-messages.ts`  
 **Применяется:** в `AgentConfirmationService` — для формирования заголовков карточек подтверждения и системных ответов
@@ -326,6 +356,7 @@ You are in global mode. Use read-only app tools for context and propose changes 
 | `recipe_*` | `recipe.prompt.ts` | shoppingList.* добавлены 2026-06-08 |
 | `shopping_list` | `shopping.prompt.ts` | mealPlan.dayGet для генерации по плану |
 | `meal_plan_slot` | `meal-plan-slot.prompt.ts` | нет write-инструментов (только proposal) |
+| `diet_planner` | `diet-planner.prompt.ts` | mealPlan.dayGet + mealPlan.addEntry (не proposal) |
 
 ---
 

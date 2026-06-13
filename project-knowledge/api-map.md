@@ -58,6 +58,7 @@ Swagger: `{base_url}/docs`
 | GET | `/v1/recipes/:id` | Получить рецепт | Опционально |
 | PUT | `/v1/recipes/:id` | Обновить рецепт | Да |
 | DELETE | `/v1/recipes/:id` | Удалить рецепт | Да |
+| GET | `/v1/recipes/:id/photo` | Получить фото рецепта (streaming из GCS) | Опционально |
 
 ---
 

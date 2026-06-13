@@ -1,6 +1,6 @@
 # Готовность к публичному запуску
 
-> Обновлено: 2026-06-08
+> Обновлено: 2026-06-13 (pre-launch audit — сессия 8)
 
 ## Система оценки
 
@@ -148,21 +148,30 @@
 
 ### Критические проблемы (блокируют запуск)
 
-Нет критических проблем.
+Нет блокирующих проблем.
 
 ### Требуют доработки перед/после запуска
 1. ⚠️ **Протестировать Paddle в live** — только sandbox тестирование
 2. ⚠️ **Mobile responsive** — нужна проверка на реальных устройствах
-3. ⚠️ **UI при отмене подписки** — нет graceful downgrade сообщения
-4. ⚠️ **RTL проверка (иврит)** — задекларирован, не проверен полностью
-5. ⚠️ **OpenAI retry/backoff** — нет защиты от transient ошибок 429/503
+3. ⚠️ **RTL проверка (иврит)** — задекларирован, не проверен полностью
+4. ⚠️ **OpenAI retry/backoff** — нет защиты от transient ошибок 429/503
+5. ⚠️ **Rate limiting для OTP** — `/v1/auth/login/request-code` не имеет ограничения частоты (риск спама)
+6. ⚠️ **Pro-only гейтинг** — `RECIPE_GENERATION` определена в плане, но нигде не проверяется; Free/Pro имеют одинаковый доступ к AI-функциям
+7. ⚠️ **Trial: проверить prod `.env.yaml`** — `DEFAULT_TRIAL_DAYS=14` в коде, нужно убедиться что `AI_TRIAL_DAYS=7` прописан в prod
+8. ⚠️ **SettingsPage inline strings** — ~12 строк внутри компонента на EN (вкладки уже исправлены)
+
+### Исправлено в audit (сессия 8)
+- ✅ **MCP controller logging** — заменены `console.warn/error` на NestJS `Logger`
+- ✅ **SettingsPage tab labels** — локализованы через `t("settings.sections.*.title")`
 
 ### Готово к запуску
 - ✅ Все основные функции приложения
 - ✅ Auth (Email OTP + JWT auto-refresh)
 - ✅ AI-агент (LangGraph + SSE + multi-LLM)
+- ✅ Diet Planner (AI-генерация дневного плана)
 - ✅ Billing infrastructure (past_due UI готов)
 - ✅ SEO (meta, OG, sitemap, robots.txt)
 - ✅ Dark/Light mode
-- ✅ EN/RU локализация
+- ✅ EN/RU/HE локализация
 - ✅ Персистентная история диалогов (PostgreSQL)
+- ✅ Admin panel (AI-квоты, статистика)

@@ -63,10 +63,12 @@ assets/
 | `/shopping` | ShoppingPage |
 | `/self-care` | SelfCarePage |
 | `/stats` | NutritionStatsPage |
+| `/diet-planner` | DietPlannerPage |
 | `/ai-agent` | → redirect к `/meal-plan` |
 | `/settings` | SettingsPage |
+| `/admin` | AdminPage (только для AdminRoute — isAdmin пользователи) |
 
-**Примечание**: `/ai-agent` — deprecated route, сейчас редиректит на meal-plan.
+**Примечание**: `/ai-agent` — deprecated route, сейчас редиректит на meal-plan. AI встроен как диалоги на каждой странице.
 
 ---
 
